@@ -283,12 +283,13 @@ static void transfer_chunk(const struct device *dev)
 		goto exit;
 	}
 	data->chunk_len = chunk_len;
-
+    
+	
 #ifdef CONFIG_SPI_INFINEON_DMA
 	const struct ifx_cat1_spi_config *const config = dev->config;
 	register struct ifx_cat1_dma_stream *dma_tx = &data->dma_tx;
 	register struct ifx_cat1_dma_stream *dma_rx = &data->dma_rx;
-
+	
 	if (chunk_len <= Cy_SCB_GetFifoSize(config->reg_addr)) {
 
 		cy_rslt_t result = ifx_cat1_spi_transfer_async(
@@ -299,6 +300,7 @@ static void transfer_chunk(const struct device *dev)
 		}
 		ret = -EIO;
 	} else {
+	    LOG_INF("%s chunk_len %d  Cy_SCB_GetFifoSize(config->reg_addr) %d",__func__,chunk_len,Cy_SCB_GetFifoSize(config->reg_addr));
 		Cy_SCB_SetTxFifoLevel(config->reg_addr, 1U);
 		Cy_SCB_SetRxFifoLevel(config->reg_addr, 0U);
 
@@ -913,9 +915,19 @@ cy_rslt_t ifx_cat1_spi_abort_async(const struct device *dev)
 {
 	struct ifx_cat1_spi_data *const data = dev->data;
 	const struct ifx_cat1_spi_config *const config = dev->config;
+	struct spi_context *ctx = &data->ctx;
 
 	Cy_SCB_SPI_AbortTransfer(config->reg_addr, &(data->context));
 	data->pending = IFX_SPI_PENDING_NONE;
+
+
+	// Abort dma and make it complete
+#ifdef CONFIG_SPI_INFINEON_DMA
+	dma_stop(data->dma_tx.dev_dma, data->dma_tx.dma_channel);
+	dma_stop(data->dma_rx.dev_dma, data->dma_rx.dma_channel);
+#endif
+	spi_context_cs_control(ctx, false);
+	spi_context_complete(ctx, dev, -EAGAIN);
 	return CY_RSLT_SUCCESS;
 }
 
