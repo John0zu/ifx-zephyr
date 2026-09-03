@@ -5,6 +5,12 @@
 
 if(CONFIG_SOC_FAMILY_INFINEON_EDGE)
 
+if(DEFINED CUSTOM_ZEPHYR_IFX_CYCFG_DIR)
+
+  set(zephyr_ifx_cycfg_dir ${CUSTOM_ZEPHYR_IFX_CYCFG_DIR})
+  message(STATUS "use customer ifx cycfg ${CUSTOM_ZEPHYR_IFX_CYCFG_DIR}")
+else()
+
   if(CONFIG_BOARD_KIT_PSE84_EVAL)
     set(zephyr_ifx_cycfg_dir ${ZEPHYR_HAL_INFINEON_MODULE_DIR}/zephyr-ifx-cycfg/pse84/kit_pse84_eval)
   elseif(CONFIG_BOARD_KIT_PSE84_AI)
@@ -13,6 +19,7 @@ if(CONFIG_SOC_FAMILY_INFINEON_EDGE)
     message(FATAL_ERROR "No supported board selected.")
   endif()
 
+endif()
   zephyr_include_directories(${zephyr_ifx_cycfg_dir})
   zephyr_include_directories(${zephyr_ifx_cycfg_dir}/device_headers)
   zephyr_library_sources(${zephyr_ifx_cycfg_dir}/cycfg_qspi_memslot.c)
