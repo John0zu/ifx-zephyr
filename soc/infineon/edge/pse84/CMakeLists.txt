@@ -42,8 +42,14 @@ if(CONFIG_CPU_CORTEX_M33 AND CONFIG_TRUSTED_EXECUTION_SECURE)
   zephyr_sources(soc_pse84_m33_s.c)
 
   zephyr_sources(security_config/pse84_s_mpc.c)
+
+if(DEFINED CONFIG_CUSTOM_ZEPHYR_IFX_SECURITY_CONFIG_DIR)
+  zephyr_sources(${CONFIG_CUSTOM_ZEPHYR_IFX_SECURITY_CONFIG_DIR}/pse84_s_protection.c)
+else()
   zephyr_sources(security_config/pse84_s_protection.c)
+endif()
   zephyr_sources(security_config/pse84_s_system.c)
+
   zephyr_sources(security_config/pse84_s_sau.c)
 
   set(unsigned_hex ${ZEPHYR_BINARY_DIR}/${KERNEL_NAME}.hex)

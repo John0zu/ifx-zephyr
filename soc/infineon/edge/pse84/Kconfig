@@ -54,3 +54,10 @@ config SOC_PSE84_LPM_TIMER
 	  Enable MCWDT as a low-power companion timer for the SysTick.
 	  The MCWDT runs from PILO (32 kHz) and provides timekeeping
 	  during deepsleep when HF clocks (and thus SysTick) are stopped.
+
+
+config CUSTOM_ZEPHYR_IFX_SECURITY_CONFIG_DIR
+    string "Custom IFX security config directory"
+    help
+      Path to custom pse84 security source files.
+      If empty, use default SDK security_config source files.
