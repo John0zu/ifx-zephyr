@@ -43,7 +43,7 @@ if(CONFIG_CPU_CORTEX_M33 AND CONFIG_TRUSTED_EXECUTION_SECURE)
 
   zephyr_sources(security_config/pse84_s_mpc.c)
 
-if(DEFINED CONFIG_CUSTOM_ZEPHYR_IFX_SECURITY_CONFIG_DIR)
+if(CONFIG_CUSTOM_ZEPHYR_IFX_SECURITY_CONFIG_DIR)
   zephyr_sources(${CONFIG_CUSTOM_ZEPHYR_IFX_SECURITY_CONFIG_DIR}/pse84_s_protection.c)
 else()
   zephyr_sources(security_config/pse84_s_protection.c)
