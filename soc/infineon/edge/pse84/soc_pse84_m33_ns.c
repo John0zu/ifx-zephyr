@@ -17,6 +17,11 @@
 #include "cy_pdl.h"
 #include <system_edge.h>
 
+#ifdef CONFIG_MBOX_INFINEON
+CY_SECTION_SHAREDMEM static cy_stc_ipc_pipe_ep_t
+	systemIpcPipeEpArray[CONFIG_MBOX_INFINEON_IPC_MAX_ENDPOINTS];
+#endif
+
 #if defined(CONFIG_BUILD_WITH_TFM)
 #include "cy_syslib.h"
 #include "mtb_srf_pool_init.h"
@@ -254,6 +259,14 @@ void soc_early_init_hook(void)
 #if defined(CONFIG_PSOC_EDGE_M55_SRF_SUPPORT)
 	pse84_srf_ipc_init();
 #endif
+
+#ifdef CONFIG_MBOX_INFINEON
+	Cy_IPC_Pipe_Config(systemIpcPipeEpArray);
+#endif
+
+	/* Initialize the SCB1 peripheral group slave clock. */
+	Cy_SysClk_PeriGroupSlaveInit(CY_MMIO_SCB1_PERI_NR, CY_MMIO_SCB1_GROUP_NR,
+				CY_MMIO_SCB1_SLAVE_NR, CY_MMIO_SCB1_CLK_HF_NR);
 }
 
 void soc_late_init_hook(void)
