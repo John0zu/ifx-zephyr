@@ -501,7 +501,8 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 			Cy_AutAnalog_SAR_ClearMuxChanResultStatus(0, mux_ch);
 		}
 	}
-
+		int count = 0;
+	
 #if defined(CONFIG_ADC_ASYNC)
 	if (!data->ctx.asynchronous) {
 #endif
@@ -511,13 +512,21 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 			uint16_t mux_ch = IFX_MUX_CHANNELS_MASK(sequence->channels);
 			bool gpio_done, mux_done;
 
+
 			do {
+				count++;
 				gpio_done = (gpio_ch == 0) ||
 					    ((Cy_AutAnalog_SAR_GetHSchanResultStatus(0) &
 					      gpio_ch) == gpio_ch);
 				mux_done = (mux_ch == 0) ||
 					   ((Cy_AutAnalog_SAR_GetMuxChanResultStatus(0) & mux_ch) ==
 					    mux_ch);
+				if(count > 1000){
+					LOG_INF("%s gpio_ch %d  mux_ch %d count %d  ",__func__,gpio_ch,mux_ch,count);
+					LOG_INF("%s gpio_done %d mux_done %d GetHSchanResultStatus %d",__func__,gpio_done,mux_done,Cy_AutAnalog_SAR_GetHSchanResultStatus(0));
+					k_sleep(K_MSEC(100));
+					break;
+				}
 			} while (!gpio_done || !mux_done);
 		}
 
