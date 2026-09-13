@@ -28,6 +28,7 @@
 
 LOG_MODULE_REGISTER(mfd_infineon_autanalog, CONFIG_MFD_LOG_LEVEL);
 
+
 /* clang-format off */
 
 /* Interrupt masks for each sub-peripheral within the AutAnalog subsystem */
@@ -535,8 +536,8 @@ static int ifx_autanalog_mfd_init(const struct device *dev)
 
 	/* Configure and enable the shared interrupt */
 	config->irq_config_func(dev);
-
-	LOG_DBG("AutAnalog MFD initialized");
+	
+	LOG_INF("AutAnalog MFD initialized");
 	return 0;
 }
 
@@ -646,17 +647,25 @@ DT_INST_FOREACH_STATUS_OKAY(IFX_AUTANALOG_MFD_INIT)
 static int ifx_autanalog_start_ac(void)
 {
 	Cy_AutAnalog_StartAutonomousControl();
-
 #if IFX_AUTANALOG_BASIC_MODE_HAS_SAR
+
 	/* This is to allow the AC to complete its initial
 	 * power-up cycle through the STT for basic mode before
 	 * the SAR attempts to pause and reconfigure it.
 	 */
+	int count = 0;
 	do {
 		k_busy_wait(100);
-	} while (Cy_AutAnalog_IsBusy());
+		LOG_INF("ifx_autanalog_start_ac\n");
+		count++;
+	} while (Cy_AutAnalog_IsBusy() && count < 100);
+
+	if(count >= 100){
+		LOG_ERR("AutAnalog Wait timeout");
+	}
 #endif
-	LOG_DBG("AutAnalog AC started");
+
+	LOG_INF("AutAnalog AC started");
 	return 0;
 }
 
