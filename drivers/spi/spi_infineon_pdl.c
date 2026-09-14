@@ -300,7 +300,7 @@ static void transfer_chunk(const struct device *dev)
 		}
 		ret = -EIO;
 	} else {
-	    LOG_INF("%s chunk_len %d  Cy_SCB_GetFifoSize(config->reg_addr) %d",__func__,chunk_len,Cy_SCB_GetFifoSize(config->reg_addr));
+	    //LOG_INF("%s chunk_len %d  Cy_SCB_GetFifoSize(config->reg_addr) %d",__func__,chunk_len,Cy_SCB_GetFifoSize(config->reg_addr));
 		Cy_SCB_SetTxFifoLevel(config->reg_addr, 1U);
 		Cy_SCB_SetRxFifoLevel(config->reg_addr, 0U);
 
