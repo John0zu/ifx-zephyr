@@ -42,6 +42,19 @@ LOG_MODULE_REGISTER(ifx_autanalog_sar_adc, CONFIG_ADC_LOG_LEVEL);
 
 #define IFX_AUTANALOG_HF_CLK_SRC 9
 
+/* AC State Transition Table index used by this driver (see the 3-state basic-mode
+ * STT in mfd_infineon_autanalog.c): state 1 is the park state where the AC idles
+ * after power-up and after each scan, state 2 enables the SAR and triggers the
+ * conversion.  The AC state must be forced explicitly because
+ * ifx_autanalog_start_autonomous_control() merely resumes the AC, so without this
+ * the SAR-sampling state would not be entered and its trigger would not be
+ * re-asserted for the conversion.
+ */
+#define IFX_AUTANALOG_SAR_AC_STATE_SAR_SAMPLE 2
+
+/* Bounded wait for the asynchronous AC pause to take effect: 100 x 10 us = 1 ms */
+#define IFX_AUTANALOG_SAR_AC_PAUSE_RETRIES 100
+
 /* clang-format off */
 
 /* FIR pseudo-channel support: FIR filter outputs appear as virtual ADC channels */
@@ -479,17 +492,25 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 
 	/* Stop the Autonomous Controller while we reconfigure the sequencer */
 	ifx_autanalog_pause_autonomous_control(cfg->mfd);
-	result_status = Cy_AutAnalog_SAR_LoadHSseqTable(0, IFX_AUTANALOG_SAR_NUM_SEQUENCERS,
-							&data->pdl_adc_seq_hs_cfg_obj[0]);
-	if (result_status != CY_AUTANALOG_SUCCESS) {
-		LOG_ERR("Error Loading ADC Sequencer Configuration: %u",
-			(unsigned int)result_status);
-		data->conversion_result = -EIO;
-		return;
+
+	/* The pause above is asynchronous, and Cy_AutAnalog_OverrideControllerState()
+	 * below is a no-op while the AC is still RUNNING, so wait (bounded) for the
+	 * pause to take effect.  Otherwise the state override can be silently
+	 * dropped and the AC would merely resume in whatever state it was paused in.
+	 */
+	for (uint32_t retry = 0U; retry < IFX_AUTANALOG_SAR_AC_PAUSE_RETRIES; retry++) {
+		if (!Cy_AutAnalog_IsBusy()) {
+			break;
+		}
+
+		k_busy_wait(10);
 	}
 
-	ifx_autanalog_start_autonomous_control(cfg->mfd);
-
+	/* Clear the result status of the requested channels BEFORE the scan is
+	 * started.  A single-shot scan completes within microseconds, so clearing
+	 * after the start would race with - and wipe - the completion bits, and the
+	 * wait loop below would never see them.
+	 */
 	{
 		uint8_t gpio_ch = IFX_GPIO_CHANNELS_MASK(sequence->channels);
 		uint16_t mux_ch = IFX_MUX_CHANNELS_MASK(sequence->channels);
@@ -501,7 +522,23 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 			Cy_AutAnalog_SAR_ClearMuxChanResultStatus(0, mux_ch);
 		}
 	}
-		int count = 0;
+
+	result_status = Cy_AutAnalog_SAR_LoadHSseqTable(0, IFX_AUTANALOG_SAR_NUM_SEQUENCERS,
+							&data->pdl_adc_seq_hs_cfg_obj[0]);
+	if (result_status != CY_AUTANALOG_SUCCESS) {
+		LOG_ERR("Error Loading ADC Sequencer Configuration: %u",
+			(unsigned int)result_status);
+		data->conversion_result = -EIO;
+		return;
+	}
+
+	/* Force the AC into the SAR-sampling state before starting it so that the
+	 * state's entry action re-asserts the SAR trigger for this conversion.
+	 */
+	Cy_AutAnalog_OverrideControllerState(IFX_AUTANALOG_SAR_AC_STATE_SAR_SAMPLE);
+	ifx_autanalog_start_autonomous_control(cfg->mfd);
+
+	int count = 0;
 	
 #if defined(CONFIG_ADC_ASYNC)
 	if (!data->ctx.asynchronous) {
@@ -670,27 +707,53 @@ static void ifx_autanalog_sar_fifo_isr(const struct device *dev)
  * @brief Calculate the sample time register value based on requested acquisition
  * time
  *
- * @param acquisition_time_ns Requested acquisition time in nanoseconds
+ * @param acquisition_time Requested acquisition time encoded with ADC_ACQ_TIME()
  *
  * @return Acquisition clock cycles, 0 if error
  */
-static uint16_t ifx_calc_acquisition_timer_val(uint32_t acquisition_time_ns)
+static uint16_t ifx_calc_acquisition_timer_val(uint16_t acquisition_time)
 {
 	const uint32_t ACQUISITION_CLOCKS_MIN = 1;
 	const uint32_t ACQUISITION_CLOCKS_MAX = 1024;
 
-	uint32_t timer_clock_cycles;
-	uint32_t clock_frequency_hz;
-	uint32_t clock_period_ns;
+	uint32_t timer_clock_cycles = 0UL;
+	uint32_t acquisition_time_ns = 0UL;
 
-	clock_frequency_hz = Cy_SysClk_ClkHfGetFrequency(IFX_AUTANALOG_HF_CLK_SRC);
-	if (clock_frequency_hz == 0) {
-		LOG_ERR("Failed to get AutAnalog clock frequency");
-		return 0;
+	if (acquisition_time == ADC_ACQ_TIME_DEFAULT) {
+		acquisition_time_ns = ADC_AUTANALOG_SAR_DEFAULT_ACQUISITION_NS;
+	} else {
+		switch (ADC_ACQ_TIME_UNIT(acquisition_time)) {
+		case ADC_ACQ_TIME_MICROSECONDS:
+			acquisition_time_ns = ADC_ACQ_TIME_VALUE(acquisition_time) * NSEC_PER_USEC;
+			break;
+		case ADC_ACQ_TIME_NANOSECONDS:
+			acquisition_time_ns = ADC_ACQ_TIME_VALUE(acquisition_time);
+			break;
+		case ADC_ACQ_TIME_TICKS:
+			timer_clock_cycles = ADC_ACQ_TIME_VALUE(acquisition_time);
+			break;
+		default:
+			LOG_ERR("Unsupported acquisition time unit: %u",
+				(unsigned int)ADC_ACQ_TIME_UNIT(acquisition_time));
+			return 0;
+		}
 	}
 
-	clock_period_ns = NSEC_PER_SEC / clock_frequency_hz;
-	timer_clock_cycles = (acquisition_time_ns + (clock_period_ns - 1)) / clock_period_ns;
+	if (timer_clock_cycles == 0UL) {
+		uint32_t clock_frequency_hz;
+		uint32_t clock_period_ns;
+
+		clock_frequency_hz = Cy_SysClk_ClkHfGetFrequency(IFX_AUTANALOG_HF_CLK_SRC);
+		if (clock_frequency_hz == 0) {
+			LOG_ERR("Failed to get AutAnalog clock frequency");
+			return 0;
+		}
+
+		clock_period_ns = NSEC_PER_SEC / clock_frequency_hz;
+		timer_clock_cycles =
+			(acquisition_time_ns + (clock_period_ns - 1)) / clock_period_ns;
+	}
+
 	if (timer_clock_cycles < ACQUISITION_CLOCKS_MIN) {
 		timer_clock_cycles = ACQUISITION_CLOCKS_MIN;
 		LOG_WRN("ADC acquisition time too short, using minimum");

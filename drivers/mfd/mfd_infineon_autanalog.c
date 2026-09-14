@@ -131,7 +131,21 @@ static const uint32_t ifx_autanalog_intr_masks[IFX_AUTANALOG_PERIPH_COUNT] = {
 /** 1 when the PRB child node is enabled */
 #define PRB_IS_USED(n) DT_NODE_HAS_STATUS(DT_CHILD(DT_DRV_INST(n), prb_e0300), okay)
 
-/* ===== Basic mode: hardcoded 3-state SAR single-shot STT ===== */
+/**
+ * Bounded AC start-up wait used by ifx_autanalog_start_ac():
+ * 100 retries x 100 us = 10 ms.
+ */
+#define IFX_AUTANALOG_AC_START_RETRIES 100
+
+/* ===== Basic mode: hardcoded 3-state SAR single-shot STT =====
+ *
+ * state 0: power-up (BLOCK_READY), then branch to state 1
+ * state 1: park / reconfiguration state (STOP) - the AC idles here after
+ *          power-up and after each completed scan
+ * state 2: SAR sampling state - the ADC driver forces the AC into this state
+ *          (Cy_AutAnalog_OverrideControllerState) to trigger a single scan;
+ *          after SAR_EOS the AC branches back to the park state
+ */
 
 #define IFX_AUTANALOG_BASIC_NUM_STT 3
 
@@ -144,19 +158,19 @@ static const uint32_t ifx_autanalog_intr_masks[IFX_AUTANALOG_PERIPH_COUNT] = {
 			.branchState = 1,                                                        \
 		},                                                                               \
 		{                                                                                \
-			.condition = CY_AUTANALOG_STT_AC_CONDITION_SAR_DONE,                     \
-			.action = CY_AUTANALOG_STT_AC_ACTION_WAIT_FOR,                           \
-			.branchState = 0,                                                        \
-		},                                                                               \
-		{                                                                                \
 			.condition = CY_AUTANALOG_STT_AC_CONDITION_FALSE,                        \
 			.action = CY_AUTANALOG_STT_AC_ACTION_STOP,                               \
+		},                                                                               \
+		{                                                                                \
+			.condition = CY_AUTANALOG_STT_AC_CONDITION_SAR_EOS,                      \
+			.action = CY_AUTANALOG_STT_AC_ACTION_WAIT_FOR,                           \
+			.branchState = 1,                                                        \
 		},                                                                               \
 	};                                                                                       \
 	static cy_stc_autanalog_stt_sar_t ifx_autanalog_sar_stt_##n[] = {                        \
 		{.unlock = SAR_IS_USED(n), .enable = SAR_IS_USED(n)},                            \
-		{.unlock = SAR_IS_USED(n), .enable = SAR_IS_USED(n), .trigger = SAR_IS_USED(n)}, \
 		{.unlock = SAR_IS_USED(n), .enable = SAR_IS_USED(n)},                            \
+		{.unlock = SAR_IS_USED(n), .enable = SAR_IS_USED(n), .trigger = SAR_IS_USED(n)}, \
 	};                                                                                       \
 	static cy_stc_autanalog_stt_ptcomp_t ifx_autanalog_ptcomp0_stt_##n[] = {                   \
 		{.unlock = PTCOMP_IS_USED(n),                                                      \
@@ -647,21 +661,31 @@ DT_INST_FOREACH_STATUS_OKAY(IFX_AUTANALOG_MFD_INIT)
 static int ifx_autanalog_start_ac(void)
 {
 	Cy_AutAnalog_StartAutonomousControl();
+
 #if IFX_AUTANALOG_BASIC_MODE_HAS_SAR
-
-	/* This is to allow the AC to complete its initial
-	 * power-up cycle through the STT for basic mode before
-	 * the SAR attempts to pause and reconfigure it.
+	/*
+	 * In basic mode the STT ends with a WAIT_FOR on SAR_DONE, so the AC only
+	 * leaves the RUNNING state once the SAR has completed a scan.  At this
+	 * point no SAR sequencer table has been loaded yet - the SAR driver loads
+	 * it on the first adc_read(), which runs long after this SYS_INIT.  A
+	 * completion therefore cannot be expected here, and waiting for one
+	 * unconditionally blocks the boot forever: the AC sits in its SAR_DONE
+	 * state while main() is never reached to program the sequencer.
+	 *
+	 * Wait a bounded time for the AC to reach its STOP state and then continue
+	 * regardless.  Leaving the AC running is harmless because the SAR driver
+	 * pauses, reconfigures and restarts the AC for every conversion.
 	 */
-	int count = 0;
-	do {
-		k_busy_wait(100);
-		LOG_INF("ifx_autanalog_start_ac\n");
-		count++;
-	} while (Cy_AutAnalog_IsBusy() && count < 100);
+	for (uint32_t retry = 0U; retry < IFX_AUTANALOG_AC_START_RETRIES; retry++) {
+		if (!Cy_AutAnalog_IsBusy()) {
+			break;
+		}
 
-	if(count >= 100){
-		LOG_ERR("AutAnalog Wait timeout");
+		k_busy_wait(100);
+	}
+
+	if (Cy_AutAnalog_IsBusy()) {
+		LOG_WRN("AutAnalog AC still running, boot continues");
 	}
 #endif
 
