@@ -50,9 +50,10 @@ config SYS_CLOCK_TICKS_PER_SEC
 # Not applied to MCUBoot itself, which runs from RRAM and needs
 # no address translation.
 config BUILD_OUTPUT_ADJUST_LMA
+	prompt "Adjust LMA address for XIP output"
 	depends on XIP
 	depends on CPU_CORTEX_M33
-	depends on !MCUBOOT
+#	depends on !MCUBOOT
 	default "0x58000000"
 
 # BL2 implementation not available yet
