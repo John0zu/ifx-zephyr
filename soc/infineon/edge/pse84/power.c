@@ -83,10 +83,10 @@ static int ifx_pm_init(void)
 {
 #if defined(CONFIG_SOC_SERIES_PSE84)
 	/* System Domain Idle Power Mode Configuration */
-	Cy_SysPm_SetDeepSleepMode(CY_SYSPM_MODE_DEEPSLEEP);
+	//Cy_SysPm_SetDeepSleepMode(CY_SYSPM_MODE_DEEPSLEEP);
 
 	/* SoCMEM Idle Power Mode Configuration */
-	Cy_SysPm_SetSOCMEMDeepSleepMode(CY_SYSPM_MODE_DEEPSLEEP);
+	//Cy_SysPm_SetSOCMEMDeepSleepMode(CY_SYSPM_MODE_DEEPSLEEP);
 #endif
 
 	return 0;
