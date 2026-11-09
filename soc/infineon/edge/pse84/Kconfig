@@ -61,3 +61,10 @@ config CUSTOM_ZEPHYR_IFX_SECURITY_CONFIG_DIR
     help
       Path to custom pse84 security source files.
       If empty, use default SDK security_config source files.
+
+
+config CUSTOM_ZEPHYR_IFX_CYCFG_DIR
+    string "Custom IFX cycfg directory"
+    help
+      Path to custom pse84 cycfg source files.
+      If empty, use default SDK default cycfg source files.

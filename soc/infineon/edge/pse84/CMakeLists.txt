@@ -36,6 +36,12 @@ if(CONFIG_BUILD_WITH_TFM)
       -DIFX_CM55_NS_PRESENT=ON
     )
   endif()
+if(CONFIG_CUSTOM_ZEPHYR_IFX_CYCFG_DIR)
+  set_property(TARGET zephyr_property_target APPEND PROPERTY TFM_CMAKE_OPTIONS
+        -DIFX_BSP_GENERATED_FILES_OUTPUT_PATH=${CONFIG_CUSTOM_ZEPHYR_IFX_CYCFG_DIR}
+        -DIFX_BSP_DESIGN_DIR_PATH=${CONFIG_CUSTOM_ZEPHYR_IFX_CYCFG_DIR}
+      )
+else()
 
   if(CONFIG_BOARD_KIT_PSE84_AI)
     set_property(TARGET zephyr_property_target APPEND PROPERTY TFM_CMAKE_OPTIONS
@@ -60,6 +66,8 @@ if(CONFIG_BUILD_WITH_TFM)
     )
   else()
     message(FATAL_ERROR "No supported board selected.")
+  endif()
+  
   endif()
 
 endif()
