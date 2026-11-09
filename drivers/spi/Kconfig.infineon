@@ -25,6 +25,12 @@ config SPI_INFINEON_PDL
 	help
 	  This option enables the PDL based SPI driver for Infineon family.
 
+config SPI_INFINEON_PDL_CUSTOM
+	bool "custom cat1_spi"
+	default n
+	depends on DT_HAS_INFINEON_SPI_ENABLED
+	help 
+		This option enables the PDL based SPI driver for Infineon family.
 if USE_INFINEON_SPI
 
 config SPI_INFINEON_DMA
