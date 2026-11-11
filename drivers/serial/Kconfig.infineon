@@ -32,3 +32,11 @@ config UART_INFINEON_CAT1_PDL
 	select USE_INFINEON_DMA if UART_ASYNC_API
 	help
 	  This option enables the PDL based UART driver for Infineon CAT1 family.
+
+
+config UART_INFINEON_CAT1_PDL_CUSTOM
+	bool "custom cat1_uart"
+	default n
+	depends on DT_HAS_INFINEON_UART_ENABLED
+	help 
+		This option enables the PDL based UART driver for Infineon family.
