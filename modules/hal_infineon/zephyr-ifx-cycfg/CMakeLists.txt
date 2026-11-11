@@ -4,7 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 if(CONFIG_SOC_FAMILY_INFINEON_EDGE)
-
+if(CONFIG_CUSTOM_ZEPHYR_IFX_CYCFG_DIR)
+  set(zephyr_ifx_cycfg_dir ${CONFIG_CUSTOM_ZEPHYR_IFX_CYCFG_DIR})
+else()
   if(CONFIG_BOARD_KIT_PSE84_EVAL)
     set(zephyr_ifx_cycfg_dir ${ZEPHYR_HAL_INFINEON_MODULE_DIR}/zephyr-ifx-cycfg/pse84/kit_pse84_eval)
   elseif(CONFIG_BOARD_KIT_PSE84_AI)
@@ -12,7 +14,7 @@ if(CONFIG_SOC_FAMILY_INFINEON_EDGE)
   else()
     message(FATAL_ERROR "No supported board selected.")
   endif()
-
+endif()
   zephyr_include_directories(${zephyr_ifx_cycfg_dir})
   zephyr_include_directories(${zephyr_ifx_cycfg_dir}/device_headers)
   zephyr_library_sources(${zephyr_ifx_cycfg_dir}/cycfg_qspi_memslot.c)
@@ -20,7 +22,12 @@ if(CONFIG_SOC_FAMILY_INFINEON_EDGE)
   if(CONFIG_BUILD_WITH_TFM)
     zephyr_include_directories(${ZEPHYR_TRUSTED_FIRMWARE_M_MODULE_DIR}/platform/ext/target/infineon/pse84/shared/device/include)
   else()
+if(CONFIG_CUSTOM_ZEPHYR_IFX_CYCFG_DIR)
+  set(zephyr_ifx_cycfg_dir ${CONFIG_CUSTOM_ZEPHYR_IFX_CYCFG_DIR})
+  set(zephyr_ifx_pse84_dir ${CONFIG_CUSTOM_ZEPHYR_IFX_CYCFG_DIR}/../)
+else()
     set(zephyr_ifx_pse84_dir ${ZEPHYR_HAL_INFINEON_MODULE_DIR}/zephyr-ifx-cycfg/pse84)
+endif()
     zephyr_include_directories(${zephyr_ifx_pse84_dir})
     zephyr_library_sources(${zephyr_ifx_pse84_dir}/ifx_cycfg_init.c)
 
